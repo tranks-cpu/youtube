@@ -145,6 +145,28 @@ class VideoRepository:
                 for row in cursor.fetchall()
             ]
 
+    @staticmethod
+    def get_latest_published_at(channel_id: str) -> Optional[datetime]:
+        """Get the most recent published_at date for a channel."""
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT MAX(published_at) as latest
+                FROM videos
+                WHERE channel_id = ?
+                """,
+                (channel_id,),
+            )
+            row = cursor.fetchone()
+            if row and row["latest"]:
+                # Handle string or datetime
+                latest = row["latest"]
+                if isinstance(latest, str):
+                    return datetime.fromisoformat(latest.replace("Z", "+00:00"))
+                return latest
+            return None
+
 
 class SchedulerStateRepository:
     @staticmethod

@@ -88,7 +88,13 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     data = query.data
 
     if data == "menu_back":
-        await query.edit_message_text(
+        # 기존 메시지의 버튼만 제거 (내용 보존)
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        # 새 메시지로 메뉴 전송
+        await query.message.reply_text(
             "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
             reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
@@ -96,7 +102,13 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return ConversationHandler.END
 
     elif data == "cancel":
-        await query.edit_message_text(
+        # 기존 메시지의 버튼만 제거
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        # 새 메시지로 메뉴 전송
+        await query.message.reply_text(
             "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
             reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
@@ -247,7 +259,11 @@ async def handle_channel_url(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if existing:
         await update.message.reply_text(
             format_error(f"이미 등록된 채널입니다: {existing.channel_name}"),
-            reply_markup=back_button(),
+            parse_mode="HTML",
+        )
+        await update.message.reply_text(
+            "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+            reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return ConversationHandler.END
@@ -255,7 +271,11 @@ async def handle_channel_url(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ChannelRepository.create(channel)
     await update.message.reply_text(
         format_success(f"채널이 추가되었습니다!\n\n📺 {channel.channel_name}"),
-        reply_markup=back_button(),
+        parse_mode="HTML",
+    )
+    await update.message.reply_text(
+        "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+        reply_markup=main_menu_keyboard(),
         parse_mode="HTML",
     )
     return ConversationHandler.END
@@ -266,22 +286,30 @@ async def handle_video_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Handle video URL input for summarization."""
     url = update.message.text.strip()
 
-    await update.message.reply_text("📝 요약을 생성하는 중... (최대 2분 소요)")
+    await update.message.reply_text("📝 요약을 생성하는 중... (최대 3분 소요)")
 
-    summary, video = await summarize_by_url(url)
+    summary, video, error = await summarize_by_url(url)
 
-    if not video:
+    if error:
         await update.message.reply_text(
-            format_error("영상을 찾을 수 없습니다."),
-            reply_markup=back_button(),
+            error.to_admin_message(),
+            parse_mode="HTML",
+        )
+        await update.message.reply_text(
+            "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+            reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return ConversationHandler.END
 
-    if not summary:
+    if not video or not summary:
         await update.message.reply_text(
-            format_error("자막이 없거나 요약 생성에 실패했습니다."),
-            reply_markup=back_button(),
+            format_error("요약 생성에 실패했습니다."),
+            parse_mode="HTML",
+        )
+        await update.message.reply_text(
+            "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+            reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
         )
         return ConversationHandler.END
@@ -289,15 +317,24 @@ async def handle_video_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     message = format_video_summary(video, summary)
     parts = split_message(message)
 
-    for i, part in enumerate(parts):
-        if i == len(parts) - 1:
-            await update.message.reply_text(
-                part,
-                reply_markup=back_button(),
-                parse_mode="HTML",
-            )
-        else:
-            await update.message.reply_text(part, parse_mode="HTML")
+    # 채널로 요약 전송
+    for part in parts:
+        await context.bot.send_message(
+            chat_id=Config.TARGET_CHAT_ID,
+            text=part,
+            parse_mode="HTML",
+        )
+
+    # 관리자에게 완료 알림
+    await update.message.reply_text(
+        format_success("요약이 채널로 전송되었습니다!"),
+        parse_mode="HTML",
+    )
+    await update.message.reply_text(
+        "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+        reply_markup=main_menu_keyboard(),
+        parse_mode="HTML",
+    )
 
     return ConversationHandler.END
 
@@ -332,7 +369,11 @@ async def handle_schedule_time(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await update.message.reply_text(
         format_success(f"스케줄 시간이 {hour:02d}:{minute:02d}로 변경되었습니다."),
-        reply_markup=back_button(),
+        parse_mode="HTML",
+    )
+    await update.message.reply_text(
+        "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+        reply_markup=main_menu_keyboard(),
         parse_mode="HTML",
     )
     return ConversationHandler.END
@@ -347,7 +388,13 @@ async def handle_remove_channel(update: Update, context: ContextTypes.DEFAULT_TY
     data = query.data
 
     if data == "menu_back":
-        await query.edit_message_text(
+        # 기존 메시지의 버튼만 제거
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        # 새 메시지로 메뉴 전송
+        await query.message.reply_text(
             "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
             reply_markup=main_menu_keyboard(),
             parse_mode="HTML",
@@ -360,9 +407,15 @@ async def handle_remove_channel(update: Update, context: ContextTypes.DEFAULT_TY
 
         if channel:
             ChannelRepository.delete(channel_id)
+            # 기존 메시지 수정
             await query.edit_message_text(
                 format_success(f"채널이 삭제되었습니다: {channel.channel_name}"),
-                reply_markup=back_button(),
+                parse_mode="HTML",
+            )
+            # 새 메시지로 메뉴 전송
+            await query.message.reply_text(
+                "<b>🎬 YouTube 요약 봇</b>\n\n원하는 작업을 선택하세요:",
+                reply_markup=main_menu_keyboard(),
                 parse_mode="HTML",
             )
         else:
@@ -434,20 +487,20 @@ async def cmd_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     url = context.args[0]
-    await update.message.reply_text("📝 요약을 생성하는 중... (최대 2분 소요)")
+    await update.message.reply_text("📝 요약을 생성하는 중... (최대 3분 소요)")
 
-    summary, video = await summarize_by_url(url)
+    summary, video, error = await summarize_by_url(url)
 
-    if not video:
+    if error:
         await update.message.reply_text(
-            format_error("영상을 찾을 수 없습니다."),
+            error.to_admin_message(),
             parse_mode="HTML",
         )
         return
 
-    if not summary:
+    if not video or not summary:
         await update.message.reply_text(
-            format_error("자막이 없거나 요약 생성에 실패했습니다."),
+            format_error("요약 생성에 실패했습니다."),
             parse_mode="HTML",
         )
         return
@@ -455,5 +508,16 @@ async def cmd_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     message = format_video_summary(video, summary)
     parts = split_message(message)
 
+    # 채널로 요약 전송
     for part in parts:
-        await update.message.reply_text(part, parse_mode="HTML")
+        await context.bot.send_message(
+            chat_id=Config.TARGET_CHAT_ID,
+            text=part,
+            parse_mode="HTML",
+        )
+
+    # 관리자에게 완료 알림
+    await update.message.reply_text(
+        format_success("요약이 채널로 전송되었습니다!"),
+        parse_mode="HTML",
+    )

@@ -1,4 +1,3 @@
-import html
 from typing import Optional
 
 from src.db.models import Channel, Video
@@ -7,8 +6,9 @@ TELEGRAM_MAX_LENGTH = 4096
 
 
 def escape_html(text: str) -> str:
-    """Escape HTML special characters."""
-    return html.escape(text)
+    """Escape only necessary HTML special characters for Telegram."""
+    # Telegram only requires &, <, > to be escaped
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def split_message(text: str, max_length: int = TELEGRAM_MAX_LENGTH) -> list[str]:
@@ -55,14 +55,38 @@ def format_video_summary(video: Video, summary: str) -> str:
 
     title = escape_html(video.title)
 
-    # Convert markdown-style formatting to HTML
-    formatted_summary = convert_markdown_to_html(summary)
+    # Clean up Claude's output for Telegram HTML
+    formatted_summary = clean_summary_html(summary)
 
     header = (
         f"<b>{title}</b>{duration_str}\n"
         f"https://youtu.be/{video.video_id}\n\n"
     )
     return header + formatted_summary
+
+
+def clean_summary_html(text: str) -> str:
+    """Clean and convert summary to valid Telegram HTML."""
+    import re
+
+    # 1. 먼저 잘못된 HTML 엔티티 복원
+    text = text.replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
+
+    # 2. 마크다운 **bold**를 HTML로 변환 (Claude가 혼용할 수 있음)
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+
+    # 3. 특수 문자 이스케이프 (태그 내부가 아닌 텍스트만)
+    # & 를 먼저 처리 (이미 &amp; 등으로 되어있지 않은 경우만)
+    text = re.sub(r'&(?!amp;|lt;|gt;|quot;)', '&amp;', text)
+
+    # 4. 텔레그램에서 지원하지 않는 HTML 태그 제거
+    # 지원: b, i, u, s, code, pre, a
+    allowed_tags = ['b', 'i', 'u', 's', 'code', 'pre', 'a']
+
+    # 5. 빈 태그 제거 <b></b>
+    text = re.sub(r'<b>\s*</b>', '', text)
+
+    return text
 
 
 def convert_markdown_to_html(text: str) -> str:

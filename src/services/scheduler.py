@@ -31,18 +31,41 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for channel in channels:
         logger.info(f"Processing channel: {channel.channel_name}")
 
+        # 가장 최근 적재된 영상 날짜 조회
+        latest_published = VideoRepository.get_latest_published_at(channel.channel_id)
+        logger.info(f"Latest video in DB: {latest_published}")
+
         videos = get_latest_videos(channel.uploads_playlist_id, max_results=5)
 
         for video in videos:
+            # 이미 DB에 있으면 스킵
             if VideoRepository.exists(video.video_id):
                 logger.debug(f"Video already processed: {video.video_id}")
                 continue
 
+            # DB에 영상이 있고, 현재 영상이 그보다 오래됐으면 스킵
+            if latest_published and video.published_at:
+                # timezone-aware 비교를 위해 naive datetime으로 변환
+                video_pub = video.published_at.replace(tzinfo=None) if video.published_at.tzinfo else video.published_at
+                latest_pub = latest_published.replace(tzinfo=None) if latest_published.tzinfo else latest_published
+
+                if video_pub <= latest_pub:
+                    logger.debug(f"Video older than latest in DB, skipping: {video.title}")
+                    continue
+
             logger.info(f"New video found: {video.title}")
             VideoRepository.create(video)
 
-            summary = await summarize_video(video)
-            if summary:
+            summary, error = await summarize_video(video)
+            if error:
+                # 관리자에게 에러 알림
+                await context.bot.send_message(
+                    chat_id=Config.ADMIN_CHAT_ID,
+                    text=error.to_admin_message(),
+                    parse_mode="HTML",
+                )
+                logger.warning(f"Failed to summarize: {video.title} - {error.error_type}")
+            elif summary:
                 message = format_video_summary(video, summary)
                 parts = split_message(message)
 
@@ -50,29 +73,34 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                     await context.bot.send_message(
                         chat_id=Config.TARGET_CHAT_ID,
                         text=part,
+                        parse_mode="HTML",
                     )
 
                 VideoRepository.mark_summarized(video.video_id)
                 logger.info(f"Summary sent for: {video.title}")
-            else:
-                logger.warning(f"Failed to summarize: {video.title}")
 
     SchedulerStateRepository.update_last_run()
     logger.info("Scheduled job completed")
 
 
 def setup_scheduler(application: Application) -> None:
-    """Set up the daily scheduler job."""
+    """Set up the daily scheduler jobs."""
     job_queue = application.job_queue
 
-    job_queue.run_daily(
-        run_scheduled_job,
-        time=time(hour=Config.SCHEDULE_HOUR, minute=Config.SCHEDULE_MINUTE),
-        name=DAILY_JOB_NAME,
-    )
-    logger.info(
-        f"Scheduler set up for {Config.SCHEDULE_HOUR:02d}:{Config.SCHEDULE_MINUTE:02d}"
-    )
+    # 오전 8시, 오후 1시, 오후 6시
+    schedule_times = [
+        (8, 0),   # 오전 8시
+        (13, 0),  # 오후 1시
+        (18, 0),  # 오후 6시
+    ]
+
+    for hour, minute in schedule_times:
+        job_queue.run_daily(
+            run_scheduled_job,
+            time=time(hour=hour, minute=minute),
+            name=f"{DAILY_JOB_NAME}_{hour:02d}{minute:02d}",
+        )
+        logger.info(f"Scheduler set up for {hour:02d}:{minute:02d}")
 
 
 def reschedule_daily_job(application: Application, hour: int, minute: int) -> None:
