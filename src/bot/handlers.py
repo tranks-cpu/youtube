@@ -19,7 +19,7 @@ from src.db.repositories import (
     VideoRepository,
 )
 from src.services.summarizer import summarize_by_url, summarize_video
-from src.services.youtube import get_channel_info
+from src.services.youtube import get_channel_info, get_latest_videos
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +269,15 @@ async def handle_channel_url(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     ChannelRepository.create(channel)
+
+    # 최신 영상 1개를 DB에 저장 (이후 영상만 요약하도록)
+    latest_videos = get_latest_videos(channel.uploads_playlist_id, max_results=1)
+    if latest_videos:
+        latest = latest_videos[0]
+        if not VideoRepository.exists(latest.video_id):
+            VideoRepository.create(latest)
+            VideoRepository.mark_summarized(latest.video_id)
+
     await update.message.reply_text(
         format_success(f"채널이 추가되었습니다!\n\n📺 {channel.channel_name}"),
         parse_mode="HTML",
@@ -470,6 +479,15 @@ async def cmd_add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     ChannelRepository.create(channel)
+
+    # 최신 영상 1개를 DB에 저장 (이후 영상만 요약하도록)
+    latest_videos = get_latest_videos(channel.uploads_playlist_id, max_results=1)
+    if latest_videos:
+        latest = latest_videos[0]
+        if not VideoRepository.exists(latest.video_id):
+            VideoRepository.create(latest)
+            VideoRepository.mark_summarized(latest.video_id)
+
     await update.message.reply_text(
         format_success(f"채널 추가됨: {channel.channel_name}"),
         parse_mode="HTML",
