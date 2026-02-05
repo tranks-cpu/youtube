@@ -53,6 +53,11 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                     logger.debug(f"Video older than latest in DB, skipping: {video.title}")
                     continue
 
+            # Shorts (60초 이하) 스킵
+            if video.duration_seconds and video.duration_seconds <= 60:
+                logger.debug(f"Shorts video, skipping: {video.title} ({video.duration_seconds}s)")
+                continue
+
             logger.info(f"New video found: {video.title}")
             VideoRepository.create(video)
 
