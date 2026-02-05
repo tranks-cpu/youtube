@@ -11,6 +11,29 @@ def escape_html(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def fix_html_tags(text: str) -> str:
+    """Fix unclosed HTML tags to prevent Telegram parse errors."""
+    import re
+
+    # 지원하는 태그들
+    tags = ['b', 'i', 'u', 's', 'code', 'pre']
+
+    for tag in tags:
+        # 열린 태그와 닫힌 태그 수 계산
+        open_count = len(re.findall(f'<{tag}>', text, re.IGNORECASE))
+        close_count = len(re.findall(f'</{tag}>', text, re.IGNORECASE))
+
+        # 닫히지 않은 태그가 있으면 끝에 추가
+        if open_count > close_count:
+            text += f'</{tag}>' * (open_count - close_count)
+        # 여는 태그 없이 닫는 태그만 있으면 제거
+        elif close_count > open_count:
+            for _ in range(close_count - open_count):
+                text = re.sub(f'</{tag}>', '', text, count=1, flags=re.IGNORECASE)
+
+    return text
+
+
 def split_message(text: str, max_length: int = TELEGRAM_MAX_LENGTH) -> list[str]:
     """Split long message into multiple parts."""
     if len(text) <= max_length:
@@ -46,23 +69,37 @@ def split_message(text: str, max_length: int = TELEGRAM_MAX_LENGTH) -> list[str]
 
 
 def format_video_summary(video: Video, summary: str) -> str:
-    """Format video summary message with HTML."""
-    duration_str = ""
-    if video.duration_seconds:
-        minutes = video.duration_seconds // 60
-        seconds = video.duration_seconds % 60
-        duration_str = f" ({minutes}:{seconds:02d})"
+    """Format video summary message. Summary is plain text from new prompt."""
+    return summary
 
-    title = escape_html(video.title)
 
-    # Clean up Claude's output for Telegram HTML
-    formatted_summary = clean_summary_html(summary)
+def split_summary_for_photo(summary: str) -> tuple[str, str]:
+    """Split summary into caption (for photo) and body (for messages).
 
-    header = (
-        f"<b>{title}</b>{duration_str}\n"
-        f"https://youtu.be/{video.video_id}\n\n"
-    )
-    return header + formatted_summary
+    Returns (caption, body) where caption is max 1024 chars for Telegram photo caption.
+    """
+    # "📖 상세 요약" 이전까지를 캡션으로
+    marker = "📖 상세 요약"
+    if marker in summary:
+        idx = summary.find(marker)
+        caption = summary[:idx].strip()
+        body = summary[idx:].strip()
+    else:
+        # 마커가 없으면 처음 900자를 캡션으로
+        caption = summary[:900]
+        body = summary[900:]
+
+    # 캡션이 1024자 초과하면 안전하게 자르기
+    if len(caption) > 1024:
+        # 1000자 근처에서 줄바꿈으로 자르기 시도
+        cut_pos = caption.rfind('\n', 0, 1000)
+        if cut_pos == -1:
+            cut_pos = caption.rfind(' ', 0, 1000)
+        if cut_pos == -1:
+            cut_pos = 1000
+        caption = caption[:cut_pos].strip() + "..."
+
+    return caption, body
 
 
 def clean_summary_html(text: str) -> str:

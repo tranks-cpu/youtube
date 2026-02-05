@@ -4,6 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
 from src.bot.formatters import (
+    fix_html_tags,
     format_channel_list,
     format_error,
     format_status,
@@ -322,16 +323,45 @@ async def handle_video_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         return ConversationHandler.END
 
-    message = format_video_summary(video, summary)
-    parts = split_message(message)
+    from src.bot.formatters import split_summary_for_photo
 
-    # 채널로 요약 전송
-    for part in parts:
+    message = format_video_summary(video, summary)
+    caption, body = split_summary_for_photo(message)
+    caption = fix_html_tags(caption)
+
+    # 채널로 썸네일 + 캡션 전송
+    if video.thumbnail_url:
+        try:
+            await context.bot.send_photo(
+                chat_id=Config.TARGET_CHAT_ID,
+                photo=video.thumbnail_url,
+                caption=caption,
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send thumbnail: {e}")
+            # 썸네일 실패 시 캡션을 일반 메시지로
+            await context.bot.send_message(
+                chat_id=Config.TARGET_CHAT_ID,
+                text=caption,
+                parse_mode="HTML",
+            )
+    else:
         await context.bot.send_message(
             chat_id=Config.TARGET_CHAT_ID,
-            text=part,
+            text=caption,
             parse_mode="HTML",
         )
+
+    # 상세 요약 전송
+    if body:
+        parts = split_message(body)
+        for part in parts:
+            await context.bot.send_message(
+                chat_id=Config.TARGET_CHAT_ID,
+                text=fix_html_tags(part),
+                parse_mode="HTML",
+            )
 
     # 관리자에게 완료 알림
     await update.message.reply_text(
@@ -522,16 +552,44 @@ async def cmd_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    message = format_video_summary(video, summary)
-    parts = split_message(message)
+    from src.bot.formatters import split_summary_for_photo
 
-    # 채널로 요약 전송
-    for part in parts:
+    message = format_video_summary(video, summary)
+    caption, body = split_summary_for_photo(message)
+    caption = fix_html_tags(caption)
+
+    # 채널로 썸네일 + 캡션 전송
+    if video.thumbnail_url:
+        try:
+            await context.bot.send_photo(
+                chat_id=Config.TARGET_CHAT_ID,
+                photo=video.thumbnail_url,
+                caption=caption,
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send thumbnail: {e}")
+            await context.bot.send_message(
+                chat_id=Config.TARGET_CHAT_ID,
+                text=caption,
+                parse_mode="HTML",
+            )
+    else:
         await context.bot.send_message(
             chat_id=Config.TARGET_CHAT_ID,
-            text=part,
+            text=caption,
             parse_mode="HTML",
         )
+
+    # 상세 요약 전송
+    if body:
+        parts = split_message(body)
+        for part in parts:
+            await context.bot.send_message(
+                chat_id=Config.TARGET_CHAT_ID,
+                text=fix_html_tags(part),
+                parse_mode="HTML",
+            )
 
     # 관리자에게 완료 알림
     await update.message.reply_text(

@@ -22,6 +22,8 @@ class Video:
     published_at: Optional[datetime] = None
     summarized_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    channel_name: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 
 @dataclass

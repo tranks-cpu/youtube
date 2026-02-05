@@ -117,17 +117,29 @@ def get_video_info(video_id: str) -> Optional[Video]:
             return None
 
         item = response["items"][0]
+        snippet = item["snippet"]
         published_at = datetime.fromisoformat(
-            item["snippet"]["publishedAt"].replace("Z", "+00:00")
+            snippet["publishedAt"].replace("Z", "+00:00")
+        )
+
+        # 썸네일 URL (고화질 우선)
+        thumbnails = snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbnails.get("maxres", {}).get("url")
+            or thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
         )
 
         return Video(
             id=None,
             video_id=video_id,
-            channel_id=item["snippet"]["channelId"],
-            title=item["snippet"]["title"],
+            channel_id=snippet["channelId"],
+            title=snippet["title"],
             duration_seconds=parse_duration(item["contentDetails"]["duration"]),
             published_at=published_at,
+            channel_name=snippet["channelTitle"],
+            thumbnail_url=thumbnail_url,
         )
 
     except HttpError as e:
@@ -176,17 +188,27 @@ def get_latest_videos(uploads_playlist_id: str, max_results: int = 10) -> list[V
         ).execute()
 
         for item in details_response.get("items", []):
+            snippet = item["snippet"]
             published_at = datetime.fromisoformat(
-                item["snippet"]["publishedAt"].replace("Z", "+00:00")
+                snippet["publishedAt"].replace("Z", "+00:00")
+            )
+            thumbnails = snippet.get("thumbnails", {})
+            thumbnail_url = (
+                thumbnails.get("maxres", {}).get("url")
+                or thumbnails.get("high", {}).get("url")
+                or thumbnails.get("medium", {}).get("url")
+                or f"https://img.youtube.com/vi/{item['id']}/hqdefault.jpg"
             )
             videos.append(
                 Video(
                     id=None,
                     video_id=item["id"],
-                    channel_id=item["snippet"]["channelId"],
-                    title=item["snippet"]["title"],
+                    channel_id=snippet["channelId"],
+                    title=snippet["title"],
                     duration_seconds=parse_duration(item["contentDetails"]["duration"]),
                     published_at=published_at,
+                    channel_name=snippet["channelTitle"],
+                    thumbnail_url=thumbnail_url,
                 )
             )
 

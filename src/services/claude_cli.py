@@ -6,7 +6,7 @@ from src.services.errors import ErrorType, SummaryError
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT_SECONDS = 180  # 3분으로 증가
+TIMEOUT_SECONDS = 300  # 5분
 
 
 async def call_claude(prompt: str, model: str = "sonnet") -> Tuple[Optional[str], Optional[SummaryError]]:

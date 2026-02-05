@@ -3,7 +3,7 @@ from datetime import time
 
 from telegram.ext import Application, ContextTypes
 
-from src.bot.formatters import format_video_summary, split_message
+from src.bot.formatters import fix_html_tags, format_video_summary, split_message
 from src.config import Config
 from src.db.repositories import (
     ChannelRepository,
@@ -66,15 +66,44 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 logger.warning(f"Failed to summarize: {video.title} - {error.error_type}")
             elif summary:
-                message = format_video_summary(video, summary)
-                parts = split_message(message)
+                from src.bot.formatters import split_summary_for_photo
 
-                for part in parts:
+                message = format_video_summary(video, summary)
+                caption, body = split_summary_for_photo(message)
+                caption = fix_html_tags(caption)
+
+                # 썸네일 + 캡션 전송
+                if video.thumbnail_url:
+                    try:
+                        await context.bot.send_photo(
+                            chat_id=Config.TARGET_CHAT_ID,
+                            photo=video.thumbnail_url,
+                            caption=caption,
+                            parse_mode="HTML",
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to send thumbnail: {e}")
+                        await context.bot.send_message(
+                            chat_id=Config.TARGET_CHAT_ID,
+                            text=caption,
+                            parse_mode="HTML",
+                        )
+                else:
                     await context.bot.send_message(
                         chat_id=Config.TARGET_CHAT_ID,
-                        text=part,
+                        text=caption,
                         parse_mode="HTML",
                     )
+
+                # 상세 요약 전송
+                if body:
+                    parts = split_message(body)
+                    for part in parts:
+                        await context.bot.send_message(
+                            chat_id=Config.TARGET_CHAT_ID,
+                            text=fix_html_tags(part),
+                            parse_mode="HTML",
+                        )
 
                 VideoRepository.mark_summarized(video.video_id)
                 logger.info(f"Summary sent for: {video.title}")
