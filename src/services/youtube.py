@@ -189,6 +189,13 @@ def get_latest_videos(uploads_playlist_id: str, max_results: int = 10) -> list[V
 
         for item in details_response.get("items", []):
             snippet = item["snippet"]
+
+            # 라이브 진행 중이거나 예정된 영상은 스킵
+            live_status = snippet.get("liveBroadcastContent", "none")
+            if live_status in ("live", "upcoming"):
+                logger.debug(f"Skipping live/upcoming: {snippet['title']} ({live_status})")
+                continue
+
             published_at = datetime.fromisoformat(
                 snippet["publishedAt"].replace("Z", "+00:00")
             )

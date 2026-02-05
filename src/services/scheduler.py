@@ -35,27 +35,13 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for channel in channels:
         logger.info(f"Processing channel: {channel.channel_name}")
 
-        # 가장 최근 적재된 영상 날짜 조회
-        latest_published = VideoRepository.get_latest_published_at(channel.channel_id)
-        logger.info(f"Latest video in DB: {latest_published}")
-
         videos = get_latest_videos(channel.uploads_playlist_id, max_results=5)
 
         for video in videos:
-            # 이미 DB에 있으면 스킵
+            # 이미 DB에 있으면 스킵 (중복 처리 방지)
             if VideoRepository.exists(video.video_id):
                 logger.debug(f"Video already processed: {video.video_id}")
                 continue
-
-            # DB에 영상이 있고, 현재 영상이 그보다 오래됐으면 스킵
-            if latest_published and video.published_at:
-                # timezone-aware 비교를 위해 naive datetime으로 변환
-                video_pub = video.published_at.replace(tzinfo=None) if video.published_at.tzinfo else video.published_at
-                latest_pub = latest_published.replace(tzinfo=None) if latest_published.tzinfo else latest_published
-
-                if video_pub <= latest_pub:
-                    logger.debug(f"Video older than latest in DB, skipping: {video.title}")
-                    continue
 
             # Shorts (60초 이하) 스킵
             if video.duration_seconds and video.duration_seconds <= 60:
