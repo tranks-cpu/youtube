@@ -1,7 +1,11 @@
 import logging
 from datetime import time
+from zoneinfo import ZoneInfo
 
 from telegram.ext import Application, ContextTypes
+
+# 한국 시간대
+KST = ZoneInfo("Asia/Seoul")
 
 from src.bot.formatters import fix_html_tags, format_video_summary, split_message
 from src.config import Config
@@ -124,10 +128,10 @@ def setup_scheduler(application: Application) -> None:
     for hour, minute in Config.SCHEDULE_TIMES:
         job_queue.run_daily(
             run_scheduled_job,
-            time=time(hour=hour, minute=minute),
+            time=time(hour=hour, minute=minute, tzinfo=KST),
             name=f"{DAILY_JOB_NAME}_{hour:02d}{minute:02d}",
         )
-        logger.info(f"Scheduler set up for {hour:02d}:{minute:02d}")
+    logger.info(f"Scheduler set up for {len(Config.SCHEDULE_TIMES)} jobs (KST timezone)")
 
 
 def reschedule_daily_job(application: Application, hour: int, minute: int) -> None:
@@ -140,7 +144,7 @@ def reschedule_daily_job(application: Application, hour: int, minute: int) -> No
 
     job_queue.run_daily(
         run_scheduled_job,
-        time=time(hour=hour, minute=minute),
+        time=time(hour=hour, minute=minute, tzinfo=KST),
         name=DAILY_JOB_NAME,
     )
-    logger.info(f"Scheduler rescheduled to {hour:02d}:{minute:02d}")
+    logger.info(f"Scheduler rescheduled to {hour:02d}:{minute:02d} KST")
