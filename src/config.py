@@ -14,8 +14,7 @@ class Config:
     ADMIN_CHAT_ID: int = int(os.getenv("ADMIN_CHAT_ID", "0"))
     TARGET_CHAT_ID: int = int(os.getenv("TARGET_CHAT_ID", "0"))
     YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
-    SCHEDULE_HOUR: int = int(os.getenv("SCHEDULE_HOUR", "10"))
-    SCHEDULE_MINUTE: int = int(os.getenv("SCHEDULE_MINUTE", "0"))
+    SCHEDULE_TIMES: list[tuple[int, int]] = [(h, 0) for h in range(24)]  # 매시간 정각
     DATABASE_PATH: Path = DATA_DIR / "bot.db"
 
     @classmethod

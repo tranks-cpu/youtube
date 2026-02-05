@@ -87,14 +87,7 @@ def setup_scheduler(application: Application) -> None:
     """Set up the daily scheduler jobs."""
     job_queue = application.job_queue
 
-    # 오전 8시, 오후 1시, 오후 6시
-    schedule_times = [
-        (8, 0),   # 오전 8시
-        (13, 0),  # 오후 1시
-        (18, 0),  # 오후 6시
-    ]
-
-    for hour, minute in schedule_times:
+    for hour, minute in Config.SCHEDULE_TIMES:
         job_queue.run_daily(
             run_scheduled_job,
             time=time(hour=hour, minute=minute),

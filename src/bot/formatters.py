@@ -166,20 +166,22 @@ def format_channel_list(channels: list[Channel]) -> str:
 
 def format_status(
     is_paused: bool,
-    schedule_hour: int,
-    schedule_minute: int,
+    schedule_times: list[tuple[int, int]],
     last_run: Optional[str],
     channel_count: int,
 ) -> str:
     """Format status message with HTML."""
     status = "⏸ 일시정지" if is_paused else "▶️ 실행 중"
-    schedule = f"{schedule_hour:02d}:{schedule_minute:02d}"
+    if len(schedule_times) == 24:
+        times_str = "매시간 정각"
+    else:
+        times_str = ", ".join(f"{h:02d}:{m:02d}" for h, m in schedule_times)
     last_run_str = last_run or "없음"
 
     return (
         f"<b>📊 스케줄러 상태</b>\n\n"
         f"상태: {status}\n"
-        f"예약 시간: 매일 {schedule}\n"
+        f"예약 시간: {times_str}\n"
         f"마지막 실행: {last_run_str}\n"
         f"등록된 채널: {channel_count}개"
     )

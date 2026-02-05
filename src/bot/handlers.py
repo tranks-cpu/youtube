@@ -194,8 +194,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await query.edit_message_text(
             format_status(
                 is_paused=state.is_paused,
-                schedule_hour=Config.SCHEDULE_HOUR,
-                schedule_minute=Config.SCHEDULE_MINUTE,
+                schedule_times=Config.SCHEDULE_TIMES,
                 last_run=last_run,
                 channel_count=len(channels),
             ),
