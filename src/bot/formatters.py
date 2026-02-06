@@ -206,6 +206,7 @@ def format_status(
     schedule_times: list[tuple[int, int]],
     last_run: Optional[str],
     channel_count: int,
+    pending_videos: list[Video] = None,
 ) -> str:
     """Format status message with HTML."""
     status = "⏸ 일시정지" if is_paused else "▶️ 실행 중"
@@ -215,13 +216,25 @@ def format_status(
         times_str = ", ".join(f"{h:02d}:{m:02d}" for h, m in schedule_times)
     last_run_str = last_run or "없음"
 
-    return (
+    result = (
         f"<b>📊 스케줄러 상태</b>\n\n"
         f"상태: {status}\n"
         f"예약 시간: {times_str}\n"
         f"마지막 실행: {last_run_str}\n"
         f"등록된 채널: {channel_count}개"
     )
+
+    if pending_videos:
+        result += f"\n\n<b>📋 요약 대기열 ({len(pending_videos)}개)</b>\n"
+        for video in pending_videos[:5]:  # 최대 5개만 표시
+            title = escape_html(video.title[:40] + "..." if len(video.title) > 40 else video.title)
+            result += f"• {title}\n"
+        if len(pending_videos) > 5:
+            result += f"  ... 외 {len(pending_videos) - 5}개"
+    else:
+        result += "\n\n📋 요약 대기열: 없음"
+
+    return result
 
 
 def format_error(message: str) -> str:

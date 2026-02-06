@@ -21,6 +21,7 @@ from src.bot.handlers import (
     handle_video_url,
     handle_schedule_time,
     handle_remove_channel,
+    handle_bot_control,
     cancel,
     WAITING_CHANNEL_URL,
     WAITING_VIDEO_URL,
@@ -87,6 +88,11 @@ def main() -> None:
     application.add_handler(CommandHandler("summarize", cmd_summarize))
     application.add_handler(CommandHandler("stop", cmd_stop))
     application.add_handler(CommandHandler("restart", cmd_restart))
+
+    # Bot control confirmation handler (stop/restart)
+    application.add_handler(
+        CallbackQueryHandler(handle_bot_control, pattern="^(confirm_stop|confirm_restart|cancel_action)$")
+    )
 
     setup_scheduler(application)
 

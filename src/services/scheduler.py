@@ -1,5 +1,5 @@
 import logging
-from datetime import time
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 from telegram.ext import Application, ContextTypes
@@ -20,6 +20,86 @@ from src.services.youtube import get_latest_videos, is_channel_live
 logger = logging.getLogger(__name__)
 
 DAILY_JOB_NAME = "daily_summary_job"
+RETRY_MAX_AGE_DAYS = 3  # 자막 없는 영상 재시도 최대 기간
+
+
+async def _send_summary(context: ContextTypes.DEFAULT_TYPE, video, summary: str) -> None:
+    """Send video summary to target chat."""
+    from src.bot.formatters import split_summary_for_photo
+
+    message = format_video_summary(video, summary)
+    caption, body = split_summary_for_photo(message)
+    caption = fix_html_tags(caption)
+
+    # 썸네일 + 캡션 전송
+    if video.thumbnail_url:
+        try:
+            await context.bot.send_photo(
+                chat_id=Config.TARGET_CHAT_ID,
+                photo=video.thumbnail_url,
+                caption=caption,
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send thumbnail: {e}")
+            await context.bot.send_message(
+                chat_id=Config.TARGET_CHAT_ID,
+                text=caption,
+                parse_mode="HTML",
+            )
+    else:
+        await context.bot.send_message(
+            chat_id=Config.TARGET_CHAT_ID,
+            text=caption,
+            parse_mode="HTML",
+        )
+
+    # 상세 요약 전송
+    if body:
+        parts = split_message(body)
+        for part in parts:
+            await context.bot.send_message(
+                chat_id=Config.TARGET_CHAT_ID,
+                text=fix_html_tags(part),
+                parse_mode="HTML",
+            )
+
+
+async def _retry_unsummarized_videos(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Retry summarization for videos that previously failed (e.g., no transcript yet)."""
+    unsummarized = VideoRepository.get_unsummarized_videos()
+    if not unsummarized:
+        return
+
+    logger.info(f"Found {len(unsummarized)} unsummarized video(s), retrying...")
+    now = datetime.now()
+
+    for video in unsummarized:
+        # 재시도 기간 초과 시 스킵
+        if video.created_at:
+            created = video.created_at if isinstance(video.created_at, datetime) else datetime.fromisoformat(str(video.created_at))
+            age_days = (now - created.replace(tzinfo=None)).days
+            if age_days > RETRY_MAX_AGE_DAYS:
+                logger.debug(f"Retry expired for: {video.title} (age: {age_days}d)")
+                continue
+
+        # DB에 없는 channel_name, thumbnail_url 보충
+        channel = ChannelRepository.get_by_channel_id(video.channel_id)
+        if channel:
+            video.channel_name = channel.channel_name
+        video.thumbnail_url = f"https://img.youtube.com/vi/{video.video_id}/hqdefault.jpg"
+
+        logger.info(f"Retrying summarization for: {video.title}")
+        summary, error = await summarize_video(video)
+
+        if error:
+            logger.info(f"Retry still failed for: {video.title} - {error.error_type}")
+            continue
+
+        if summary:
+            await _send_summary(context, video, summary)
+            VideoRepository.mark_summarized(video.video_id)
+            logger.info(f"Retry successful, summary sent for: {video.title}")
 
 
 async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -77,47 +157,12 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 logger.warning(f"Failed to summarize: {video.title} - {error.error_type}")
             elif summary:
-                from src.bot.formatters import split_summary_for_photo
-
-                message = format_video_summary(video, summary)
-                caption, body = split_summary_for_photo(message)
-                caption = fix_html_tags(caption)
-
-                # 썸네일 + 캡션 전송
-                if video.thumbnail_url:
-                    try:
-                        await context.bot.send_photo(
-                            chat_id=Config.TARGET_CHAT_ID,
-                            photo=video.thumbnail_url,
-                            caption=caption,
-                            parse_mode="HTML",
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to send thumbnail: {e}")
-                        await context.bot.send_message(
-                            chat_id=Config.TARGET_CHAT_ID,
-                            text=caption,
-                            parse_mode="HTML",
-                        )
-                else:
-                    await context.bot.send_message(
-                        chat_id=Config.TARGET_CHAT_ID,
-                        text=caption,
-                        parse_mode="HTML",
-                    )
-
-                # 상세 요약 전송
-                if body:
-                    parts = split_message(body)
-                    for part in parts:
-                        await context.bot.send_message(
-                            chat_id=Config.TARGET_CHAT_ID,
-                            text=fix_html_tags(part),
-                            parse_mode="HTML",
-                        )
-
+                await _send_summary(context, video, summary)
                 VideoRepository.mark_summarized(video.video_id)
                 logger.info(f"Summary sent for: {video.title}")
+
+    # 미요약 영상 재시도 (자막이 아직 생성되지 않았던 영상들)
+    await _retry_unsummarized_videos(context)
 
     SchedulerStateRepository.update_last_run()
     logger.info("Scheduled job completed")

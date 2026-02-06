@@ -192,6 +192,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     elif data == "menu_status":
         state = SchedulerStateRepository.get()
         channels = ChannelRepository.get_all()
+        pending_videos = VideoRepository.get_unsummarized_videos()
         last_run = str(state.last_run_at) if state.last_run_at else None
 
         await query.edit_message_text(
@@ -200,6 +201,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 schedule_times=Config.SCHEDULE_TIMES,
                 last_run=last_run,
                 channel_count=len(channels),
+                pending_videos=pending_videos,
             ),
             reply_markup=back_button(),
             parse_mode="HTML",
@@ -602,23 +604,52 @@ async def cmd_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 @admin_only
 async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /stop command - stop the bot."""
+    """Handle /stop command - show confirmation."""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ 확인", callback_data="confirm_stop"),
+            InlineKeyboardButton("❌ 취소", callback_data="cancel_action"),
+        ]
+    ]
     await update.message.reply_text(
-        "🛑 봇을 종료합니다...",
+        "🛑 <b>봇을 종료하시겠습니까?</b>\n\n다시 시작하려면 서버에서 수동으로 실행해야 합니다.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML",
     )
-    logger.info("Bot stopping by admin command")
-    await context.application.stop()
-    sys.exit(0)
 
 
 @admin_only
 async def cmd_restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /restart command - restart the bot."""
+    """Handle /restart command - show confirmation."""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ 확인", callback_data="confirm_restart"),
+            InlineKeyboardButton("❌ 취소", callback_data="cancel_action"),
+        ]
+    ]
     await update.message.reply_text(
-        "🔄 봇을 재시작합니다...",
+        "🔄 <b>봇을 재시작하시겠습니까?</b>",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML",
     )
-    logger.info("Bot restarting by admin command")
-    await context.application.stop()
-    os.execv(sys.executable, [sys.executable, "-m", "src.main"])
+
+
+async def handle_bot_control(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle bot control confirmation callbacks."""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "confirm_stop":
+        await query.edit_message_text("🛑 봇을 종료합니다...")
+        logger.info("Bot stopping by admin command")
+        await context.application.stop()
+        sys.exit(0)
+
+    elif query.data == "confirm_restart":
+        await query.edit_message_text("🔄 봇을 재시작합니다...")
+        logger.info("Bot restarting by admin command")
+        await context.application.stop()
+        os.execv(sys.executable, [sys.executable, "-m", "src.main"])
+
+    elif query.data == "cancel_action":
+        await query.edit_message_text("❌ 취소되었습니다.")

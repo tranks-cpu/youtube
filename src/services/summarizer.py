@@ -79,7 +79,13 @@ async def summarize_video(video: Video) -> Tuple[Optional[str], Optional[Summary
 
     # 메타 정보 포맷팅
     now = datetime.now()
-    uploaded_at = video.published_at.strftime("%Y-%m-%d") if video.published_at else "알 수 없음"
+    if video.published_at:
+        if isinstance(video.published_at, str):
+            uploaded_at = video.published_at[:10]
+        else:
+            uploaded_at = video.published_at.strftime("%Y-%m-%d")
+    else:
+        uploaded_at = "알 수 없음"
     summarized_at = now.strftime("%Y-%m-%d %H:%M")
 
     prompt = prompt_template.format(
