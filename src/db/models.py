@@ -24,6 +24,7 @@ class Video:
     created_at: Optional[datetime] = None
     channel_name: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    live_status: Optional[str] = None  # "live", "upcoming", or "none"
 
 
 @dataclass

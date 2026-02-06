@@ -241,6 +241,7 @@ def get_latest_videos(uploads_playlist_id: str, max_results: int = 10) -> list[V
                     published_at=published_at,
                     channel_name=snippet["channelTitle"],
                     thumbnail_url=thumbnail_url,
+                    live_status=snippet.get("liveBroadcastContent", "none"),
                 )
             )
 

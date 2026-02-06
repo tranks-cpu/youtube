@@ -15,7 +15,7 @@ from src.db.repositories import (
     VideoRepository,
 )
 from src.services.summarizer import summarize_video
-from src.services.youtube import get_latest_videos, is_channel_live
+from src.services.youtube import get_latest_videos
 
 logger = logging.getLogger(__name__)
 
@@ -115,17 +115,17 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     for channel in channels:
         logger.info(f"Processing channel: {channel.channel_name}")
 
-        # 채널이 라이브 중이면 스킵 (다음 시간에 다시 체크)
-        if is_channel_live(channel.uploads_playlist_id):
-            logger.info(f"Channel is live, skipping: {channel.channel_name}")
-            continue
-
         # 기준점: DB에서 가장 최신 영상의 published_at
         latest_published = VideoRepository.get_latest_published_at(channel.channel_id)
 
-        videos = get_latest_videos(channel.uploads_playlist_id, max_results=5)
+        videos = get_latest_videos(channel.uploads_playlist_id, max_results=10)
 
         for video in videos:
+            # 라이브 중이거나 예정된 라이브는 스킵 (자막 없음, 종료 후 다음 스캔에서 처리)
+            if video.live_status in ("live", "upcoming"):
+                logger.debug(f"Live/upcoming video, skipping: {video.title} ({video.live_status})")
+                continue
+
             # 이미 DB에 있으면 스킵 (중복 처리 방지)
             if VideoRepository.exists(video.video_id):
                 logger.debug(f"Video already processed: {video.video_id}")
@@ -139,9 +139,9 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
                     logger.debug(f"Video older than baseline, skipping: {video.title}")
                     continue
 
-            # Shorts (60초 이하) 스킵
-            if video.duration_seconds and video.duration_seconds <= 60:
-                logger.debug(f"Shorts video, skipping: {video.title} ({video.duration_seconds}s)")
+            # 짧은 영상 (3분 이하) 스킵
+            if video.duration_seconds and video.duration_seconds <= 180:
+                logger.debug(f"Short video, skipping: {video.title} ({video.duration_seconds}s)")
                 continue
 
             logger.info(f"New video found: {video.title}")
