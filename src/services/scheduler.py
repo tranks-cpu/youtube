@@ -15,7 +15,7 @@ from src.db.repositories import (
     VideoRepository,
 )
 from src.services.summarizer import summarize_video
-from src.services.youtube import get_latest_videos
+from src.services.youtube import get_latest_videos, is_channel_live
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,11 @@ async def run_scheduled_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     for channel in channels:
         logger.info(f"Processing channel: {channel.channel_name}")
+
+        # 채널이 라이브 중이면 스킵 (다음 시간에 다시 체크)
+        if is_channel_live(channel.uploads_playlist_id):
+            logger.info(f"Channel is live, skipping: {channel.channel_name}")
+            continue
 
         videos = get_latest_videos(channel.uploads_playlist_id, max_results=5)
 

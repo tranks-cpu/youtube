@@ -150,6 +150,38 @@ def get_video_info(video_id: str) -> Optional[Video]:
         return None
 
 
+def is_channel_live(uploads_playlist_id: str) -> bool:
+    """Check if the channel's latest video is a live stream (live or upcoming)."""
+    try:
+        youtube = get_youtube_client()
+        response = youtube.playlistItems().list(
+            part="snippet",
+            playlistId=uploads_playlist_id,
+            maxResults=1,
+        ).execute()
+
+        if not response.get("items"):
+            return False
+
+        video_id = response["items"][0]["snippet"]["resourceId"]["videoId"]
+
+        # 영상 상세 정보로 라이브 상태 확인
+        details = youtube.videos().list(
+            part="snippet",
+            id=video_id,
+        ).execute()
+
+        if not details.get("items"):
+            return False
+
+        live_status = details["items"][0]["snippet"].get("liveBroadcastContent", "none")
+        return live_status in ("live", "upcoming")
+
+    except Exception as e:
+        logger.error(f"Error checking live status: {e}")
+        return False
+
+
 def extract_video_id(url: str) -> Optional[str]:
     """Extract video ID from various YouTube URL formats."""
     patterns = [
@@ -189,13 +221,6 @@ def get_latest_videos(uploads_playlist_id: str, max_results: int = 10) -> list[V
 
         for item in details_response.get("items", []):
             snippet = item["snippet"]
-
-            # 라이브 진행 중이거나 예정된 영상은 스킵
-            live_status = snippet.get("liveBroadcastContent", "none")
-            if live_status in ("live", "upcoming"):
-                logger.debug(f"Skipping live/upcoming: {snippet['title']} ({live_status})")
-                continue
-
             published_at = datetime.fromisoformat(
                 snippet["publishedAt"].replace("Z", "+00:00")
             )
