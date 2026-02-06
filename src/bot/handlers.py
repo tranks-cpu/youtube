@@ -1,4 +1,6 @@
 import logging
+import os
+import sys
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
@@ -596,3 +598,27 @@ async def cmd_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         format_success("요약이 채널로 전송되었습니다!"),
         parse_mode="HTML",
     )
+
+
+@admin_only
+async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /stop command - stop the bot."""
+    await update.message.reply_text(
+        "🛑 봇을 종료합니다...",
+        parse_mode="HTML",
+    )
+    logger.info("Bot stopping by admin command")
+    await context.application.stop()
+    sys.exit(0)
+
+
+@admin_only
+async def cmd_restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /restart command - restart the bot."""
+    await update.message.reply_text(
+        "🔄 봇을 재시작합니다...",
+        parse_mode="HTML",
+    )
+    logger.info("Bot restarting by admin command")
+    await context.application.stop()
+    os.execv(sys.executable, [sys.executable, "-m", "src.main"])

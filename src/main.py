@@ -14,6 +14,8 @@ from src.bot.handlers import (
     cmd_start,
     cmd_add_channel,
     cmd_summarize,
+    cmd_stop,
+    cmd_restart,
     menu_callback,
     handle_channel_url,
     handle_video_url,
@@ -83,6 +85,8 @@ def main() -> None:
     # Legacy direct command handlers
     application.add_handler(CommandHandler("add_channel", cmd_add_channel))
     application.add_handler(CommandHandler("summarize", cmd_summarize))
+    application.add_handler(CommandHandler("stop", cmd_stop))
+    application.add_handler(CommandHandler("restart", cmd_restart))
 
     setup_scheduler(application)
 
