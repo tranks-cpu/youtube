@@ -35,6 +35,10 @@ from src.services.scheduler import setup_scheduler
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("bot.log"),
+    ],
 )
 logger = logging.getLogger(__name__)
 

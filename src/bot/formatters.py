@@ -15,6 +15,9 @@ def fix_html_tags(text: str) -> str:
     """Fix unclosed HTML tags to prevent Telegram parse errors."""
     import re
 
+    # 텔레그램에서 지원하지 않는 태그 제거 (img, br, hr, div, span, p 등)
+    text = re.sub(r'<(?!/?(?:b|i|u|s|code|pre|a)\b)[^>]+>', '', text)
+
     # 지원하는 태그들
     tags = ['b', 'i', 'u', 's', 'code', 'pre']
 
